@@ -6,6 +6,8 @@ Drift Scorecard measures it. Give it a reference picture and a video, and it che
 
 See a finished report in [`example-report/report.html`](example-report/report.html). Download that file and open it in a browser.
 
+For results from real AI-generated clips, see [the real-world test](PORTFOLIO.md).
+
 ## What it measures
 
 | Measure | Plain meaning | How it is calculated |
