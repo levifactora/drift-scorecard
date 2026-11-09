@@ -1,6 +1,6 @@
 # Drift Scorecard: real-world test
 
-AI video can look right in the first frame, then slowly move away from the look of the series. I built Drift Scorecard to measure that automatically. It compares the start, middle and end of each clip with a reference picture, then gives a pass or fail against set limits.
+AI video can look right in the first frame, then slowly move away from the look of the series. I built Drift Scorecard to measure that automatically. It compares frames from each clip with a reference picture, then scores them against set limits.
 
 ## The test
 
@@ -10,6 +10,17 @@ I ran it on all 31 clips from one episode of a real AI-generated video series, s
 |---|---|---|---|
 | Default (background at least 70%) | 2 of 4 | 26 of 27 | 28 of 31 |
 | Looser background (at least 60%) | 4 of 4 | 22 of 27 | 26 of 31 |
+
+## Version 2 on the same clips
+
+Version 2 added an overall-look score, five frames per clip instead of three, and an UNSURE result for clips just outside a limit.
+
+| Limits | Approved clips | Redo clips | Clearly right | Clearly wrong | Left to a person |
+|---|---|---|---|---|---|
+| Standard | 2 passed, 1 unsure, 1 failed | 24 failed, 2 unsure, 1 passed | 26 of 31 | 2 of 31 | 3 of 31 |
+| Cartoon preset | 4 passed | 24 failed, 3 passed | 28 of 31 | 3 of 31 | 0 of 31 |
+
+The UNSURE result reduced clear mistakes from 3 to 2 on standard limits by sending borderline clips to a person. Checking more frames, and adding overall look at its standard limit, did not change any result on this episode. The cartoon preset's limits were chosen after seeing these clips, so its row is a best case and still needs a test on new footage.
 
 ## What it showed
 
@@ -21,4 +32,4 @@ I ran it on all 31 clips from one episode of a real AI-generated video series, s
 
 ## Limits of this test
 
-This is one episode from one creator, with only four approved clips. Some redo decisions used earlier color and background checks that work much like this tool, so the comparison isn't fully independent. The approved clips were also re-rendered later than the others, which may affect their scores. The tool measures color and background match only, so a person still needs to review each clip.
+This is one episode from one creator, with only four approved clips. Some redo decisions used earlier color and background checks that work much like this tool, so the comparison isn't fully independent. The approved clips were also re-rendered later than the others, which may affect their scores. The tool measures color, background and general resemblance only, so a person still needs to review each clip.

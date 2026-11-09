@@ -6,6 +6,7 @@
           "max" : 115,
           "metric" : "Saturation",
           "min" : 85,
+          "near" : false,
           "passed" : true,
           "value" : 102.3
         },
@@ -13,6 +14,7 @@
           "max" : 110,
           "metric" : "Brightness",
           "min" : 90,
+          "near" : false,
           "passed" : true,
           "value" : 97.5
         },
@@ -20,8 +22,17 @@
           "max" : 100,
           "metric" : "Background",
           "min" : 70,
+          "near" : false,
           "passed" : true,
           "value" : 98.9
+        },
+        {
+          "max" : 0.45,
+          "metric" : "Overall look",
+          "min" : 0,
+          "near" : false,
+          "passed" : true,
+          "value" : 0.24
         }
       ],
       "label" : "Start",
@@ -33,6 +44,45 @@
           "max" : 115,
           "metric" : "Saturation",
           "min" : 85,
+          "near" : true,
+          "passed" : false,
+          "value" : 115.5
+        },
+        {
+          "max" : 110,
+          "metric" : "Brightness",
+          "min" : 90,
+          "near" : false,
+          "passed" : true,
+          "value" : 91.5
+        },
+        {
+          "max" : 100,
+          "metric" : "Background",
+          "min" : 70,
+          "near" : false,
+          "passed" : false,
+          "value" : 18.4
+        },
+        {
+          "max" : 0.45,
+          "metric" : "Overall look",
+          "min" : 0,
+          "near" : false,
+          "passed" : true,
+          "value" : 0.24
+        }
+      ],
+      "label" : "25%",
+      "seconds" : 0.75
+    },
+    {
+      "checks" : [
+        {
+          "max" : 115,
+          "metric" : "Saturation",
+          "min" : 85,
+          "near" : false,
           "passed" : false,
           "value" : 132
         },
@@ -40,6 +90,7 @@
           "max" : 110,
           "metric" : "Brightness",
           "min" : 90,
+          "near" : false,
           "passed" : false,
           "value" : 83.9
         },
@@ -47,8 +98,17 @@
           "max" : 100,
           "metric" : "Background",
           "min" : 70,
+          "near" : false,
           "passed" : false,
           "value" : 3.5
+        },
+        {
+          "max" : 0.45,
+          "metric" : "Overall look",
+          "min" : 0,
+          "near" : false,
+          "passed" : true,
+          "value" : 0.25
         }
       ],
       "label" : "Middle",
@@ -60,6 +120,45 @@
           "max" : 115,
           "metric" : "Saturation",
           "min" : 85,
+          "near" : false,
+          "passed" : false,
+          "value" : 147
+        },
+        {
+          "max" : 110,
+          "metric" : "Brightness",
+          "min" : 90,
+          "near" : false,
+          "passed" : false,
+          "value" : 76.2
+        },
+        {
+          "max" : 100,
+          "metric" : "Background",
+          "min" : 70,
+          "near" : false,
+          "passed" : false,
+          "value" : 1.2
+        },
+        {
+          "max" : 0.45,
+          "metric" : "Overall look",
+          "min" : 0,
+          "near" : false,
+          "passed" : true,
+          "value" : 0.29
+        }
+      ],
+      "label" : "75%",
+      "seconds" : 2.25
+    },
+    {
+      "checks" : [
+        {
+          "max" : 115,
+          "metric" : "Saturation",
+          "min" : 85,
+          "near" : false,
           "passed" : false,
           "value" : 156.1
         },
@@ -67,6 +166,7 @@
           "max" : 110,
           "metric" : "Brightness",
           "min" : 90,
+          "near" : false,
           "passed" : false,
           "value" : 70.1
         },
@@ -74,8 +174,17 @@
           "max" : 100,
           "metric" : "Background",
           "min" : 70,
+          "near" : false,
           "passed" : false,
           "value" : 1.9
+        },
+        {
+          "max" : 0.45,
+          "metric" : "Overall look",
+          "min" : 0,
+          "near" : false,
+          "passed" : true,
+          "value" : 0.3
         }
       ],
       "label" : "End",
@@ -88,9 +197,11 @@
     "backgroundMin" : 70,
     "brightnessMax" : 110,
     "brightnessMin" : 90,
+    "overallLookMax" : 0.45,
     "saturationMax" : 115,
     "saturationMin" : 85
   },
+  "verdict" : "fail",
   "videoFile" : "color-drift.mp4",
   "warnings" : [
 

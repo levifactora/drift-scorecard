@@ -2,3 +2,4 @@
 samples/
 drift-report/
 .DS_Store
+dist/

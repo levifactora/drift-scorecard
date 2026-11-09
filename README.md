@@ -2,7 +2,7 @@
 
 AI video tools often "drift": a clip starts out matching your picture, then the colors get stronger, the image gets darker, or the room behind the subject changes. Drift is easy to miss by eye when you are reviewing many clips.
 
-Drift Scorecard measures it. Give it a reference picture and a video, and it checks the **start, middle and end** of the video against the picture, then reports **PASS** or **FAIL** against limits you choose.
+Drift Scorecard measures it. Give it a reference picture and a video or a whole folder of videos. It checks evenly spaced frames against the picture, then reports **PASS**, **UNSURE** or **FAIL** against limits you choose.
 
 See a finished report in [`example-report/report.html`](example-report/report.html). Download that file and open it in a browser.
 
@@ -15,12 +15,19 @@ For results from real AI-generated clips, see [the real-world test](PORTFOLIO.md
 | **Saturation** | How vivid the colors are | Average of (strongest color − weakest color) ÷ strongest color for each pixel, shown as a percent of the reference |
 | **Brightness** | How light the picture is | Average of red, green and blue for each pixel, shown as a percent of the reference |
 | **Background** | Whether the setting still looks the same | The top 35% of the frame is split into a 4 × 2 grid. Each square's mix of colors is compared with the same square in the reference, then the results are averaged |
+| **Overall look** | Whether the whole picture still resembles the reference | Apple's on-device image comparison |
 
-For saturation and brightness, 100% means the same as the reference. For background, 100% means identical and 0% means nothing in common.
+For saturation and brightness, 100% means the same as the reference. For background, 100% means identical and 0% means nothing in common. For overall look, 0 means identical and higher means less alike.
 
-A video passes only if **all three frames pass all three measures**.
+A video passes only if **every checked frame passes every measure**. A result only just outside a limit is **UNSURE**, which means a person should look. A clear miss on any frame is a **FAIL**.
 
-## What you need
+## The easy way: the Mac app
+
+Build it once with `zsh scripts/build-app.sh`, then double-click **Drift Scorecard** in the `dist` folder. It asks for your picture and your video or folder, then opens the report. Reports are saved in `Documents/Drift Scorecard Reports`.
+
+The app isn't signed with a paid Apple developer account, so a copy you download may be blocked the first time. If it is, open **System Settings → Privacy & Security** and choose **Open Anyway**.
+
+## What you need to use the Terminal version
 
 - A Mac running macOS 12 or newer
 - Apple's free Command Line Tools. If you don't have them, open the **Terminal** app and run the command below, then click Install.
@@ -77,6 +84,14 @@ Each run replaces the report in the `drift-report` folder. To keep reports separ
 swift run --quiet drift-scorecard my-picture.png my-video.mp4 --out report-for-clip-2
 ```
 
+## Check a whole folder
+
+Give it a folder instead of a video. You get one summary with every clip's result, drift graphs across the clips, and a link to each clip's own report. A clip that can't be read is listed as UNSURE and doesn't stop the run.
+
+```bash
+swift run --quiet drift-scorecard my-picture.png my-clips-folder
+```
+
 ## Set your own limits
 
 | Setting | What it controls | Default |
@@ -86,6 +101,11 @@ swift run --quiet drift-scorecard my-picture.png my-video.mp4 --out report-for-c
 | `--brightness-min` | Lowest allowed brightness | 90 |
 | `--brightness-max` | Highest allowed brightness | 110 |
 | `--background-min` | Lowest allowed background match | 70 |
+| `--overall-look-max` | Highest allowed overall look difference | 0.45 |
+| `--frames` | How many frames to check in each video, 3 to 25 | 5 |
+| `--preset` | Starting limits, `standard` or `cartoon` | standard |
+
+The `cartoon` preset (background at least 60, overall look at most 0.40) was chosen from one episode of one 3D-style cartoon series, after seeing its results. Treat it as a starting point. Any limit you set yourself overrides a preset. There are no presets for realistic or anime footage yet, because they haven't been tested.
 
 For example, this is a stricter brightness check:
 
@@ -104,25 +124,42 @@ The defaults are only starting points. A fair way to set your own:
 
 This matters most for videos from other tools. Video files store color differently from pictures, so a clip can be consistently a few percent off its reference even when it looks right. While building this tool, a practice video with no color label measured 83% saturation against its own source picture. Once the label was added, it measured 99.7%. Checking a known-good clip first shows you what "normal" looks like for your tool.
 
+## Test it on your own clips
+
+The honest way to know whether this helps you is to compare it with your own decisions. Make a text file with one line per clip, using `keep` or `redo`:
+
+```
+keep clip_01.mp4
+redo clip_02.mp4
+```
+
+Then add it to a folder check:
+
+```bash
+swift run --quiet drift-scorecard my-picture.png my-clips-folder --decisions decisions.txt
+```
+
+It shows how many clips it got clearly right, clearly wrong and left to a person, next to what you'd get by giving every clip your most common decision.
+
 ## Reading the result
 
-The report is saved as `report.html` for people and `report.json` for other software.
+The report is saved as `report.html` for people and `report.json` for other software. It includes a graph for each measure. The shaded area is the allowed range, a circle is within limits, and a diamond is outside them. A folder check's graphs show each clip's worst frame.
 
 The program also finishes with a status number that automated workflows can use:
 
 | Status | Meaning |
 |---|---|
-| 0 | The video passed |
-| 1 | The video failed |
+| 0 | Every video passed |
+| 1 | A video failed or is unsure |
 | 2 | It could not run, such as a missing or damaged file |
 
 ## What it can't tell you
 
 Treat the scorecard as a first filter, not a replacement for watching the clip.
 
-- It compares overall color. It can't recognize whether a person, animal or object still looks like itself.
+- It compares color, background and general resemblance. It can't reliably tell whether a person, animal or object still looks like itself.
 - It assumes the top 35% of the frame is mostly background. If your subject fills that area, or the camera moves on purpose, the background score will drop.
-- It checks three moments, so a brief glitch between them won't be seen.
+- It checks a set number of moments, so a brief glitch between them won't be seen. Use `--frames` to check more.
 - The background check groups colors into broad ranges. A small shift that crosses from one range to another can change the score more than the eye would expect.
 
 ## Run the tests
@@ -137,9 +174,11 @@ The tests check the math on known colors, the pass and fail rules, error handlin
 
 | Location | Purpose |
 |---|---|
-| `Sources/DriftCore/Metrics.swift` | The three measurements |
+| `Sources/DriftCore/Metrics.swift` | Color and background measurements |
 | `Sources/DriftCore/Scorecard.swift` | Limits, pass/fail rules and command-line options |
 | `Sources/DriftCore/Media.swift` | Opening pictures and pulling frames from video |
-| `Sources/DriftCore/Report.swift` | Terminal, HTML and JSON reports |
+| `Sources/DriftCore/Report.swift` | Terminal, HTML and JSON reports, and graphs |
+| `Sources/DriftCore/Batch.swift` | Folder checks and accuracy comparison |
+| `scripts/` | Builds the Mac app |
 | `Sources/DriftCore/SampleMedia.swift` | Practice picture and videos |
 | `Sources/drift-tests/main.swift` | The tests |

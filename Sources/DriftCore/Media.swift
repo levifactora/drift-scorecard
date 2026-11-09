@@ -3,6 +3,7 @@ import CoreGraphics
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
+import Vision
 
 let analysisWidth = 480
 
@@ -19,14 +20,31 @@ public func loadPicture(_ path: String) throws -> CGImage {
     return image
 }
 
-/// Where the start, middle and end frames are taken. Stays just inside the ends,
-/// where video decoders are least reliable.
-public func sampleTimes(duration: Double) -> [(label: String, seconds: Double)] {
+/// Evenly spaced frames. Stays just inside the ends, where video decoders are least reliable.
+public func sampleTimes(duration: Double, count: Int = defaultFrameCount) -> [(label: String, seconds: Double)] {
     let inset = min(0.1, duration / 10)
-    return [("Start", inset), ("Middle", duration / 2), ("End", duration - inset)]
+    return (0..<count).map { index in
+        if index == 0 { return ("Start", inset) }
+        if index == count - 1 { return ("End", duration - inset) }
+        let fraction = Double(index) / Double(count - 1)
+        return (fraction == 0.5 ? "Middle" : "\(Int((fraction * 100).rounded()))%", duration * fraction)
+    }
 }
 
-public func loadVideoFrames(_ path: String) throws -> [(label: String, seconds: Double, image: CGImage)] {
+/// Apple's on-device image comparison. 0 is identical; higher is less alike.
+public func overallLookDistance(_ first: CGImage, _ second: CGImage) throws -> Double {
+    func featurePrint(_ image: CGImage) throws -> VNFeaturePrintObservation {
+        let request = VNGenerateImageFeaturePrintRequest()
+        try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
+        guard let observation = request.results?.first else { throw CocoaError(.fileReadUnknown) }
+        return observation
+    }
+    var distance: Float = 0
+    try featurePrint(first).computeDistance(&distance, to: featurePrint(second))
+    return Double(distance)
+}
+
+public func loadVideoFrames(_ path: String, count: Int = defaultFrameCount) throws -> [(label: String, seconds: Double, image: CGImage)] {
     try requireFile(path)
     let asset = AVURLAsset(url: URL(fileURLWithPath: path))
     let duration = CMTimeGetSeconds(asset.duration)
@@ -37,7 +55,7 @@ public func loadVideoFrames(_ path: String) throws -> [(label: String, seconds: 
     generator.appliesPreferredTrackTransform = true
     generator.requestedTimeToleranceBefore = .zero
     generator.requestedTimeToleranceAfter = .zero
-    return try sampleTimes(duration: duration).map { sample in
+    return try sampleTimes(duration: duration, count: count).map { sample in
         // A frame that cannot be read must stop the run: skipping it could let a bad video pass.
         guard let image = try? generator.copyCGImage(at: CMTime(seconds: sample.seconds, preferredTimescale: 600), actualTime: nil) else {
             throw ScorecardError.frameUnavailable(path, sample.seconds)
@@ -81,13 +99,16 @@ public struct ScorecardRun {
 }
 
 /// Loads both files and scores the video. Frames are compared at the reference picture's shape.
-public func runScorecard(referencePath: String, videoPath: String, thresholds: Thresholds) throws -> ScorecardRun {
+public func runScorecard(referencePath: String, videoPath: String, thresholds: Thresholds, frameCount: Int = defaultFrameCount) throws -> ScorecardRun {
     let referenceImage = try loadPicture(referencePath)
-    let loaded = try loadVideoFrames(videoPath)
+    let loaded = try loadVideoFrames(videoPath, count: frameCount)
 
     let height = max(8, Int((Double(analysisWidth) * Double(referenceImage.height) / Double(referenceImage.width)).rounded()))
     let reference = normalize(referenceImage, width: analysisWidth, height: height)
-    let frames = loaded.map { SampledFrame(label: $0.label, seconds: $0.seconds, image: normalize($0.image, width: analysisWidth, height: height)) }
+    let frames = try loaded.map {
+        SampledFrame(label: $0.label, seconds: $0.seconds, image: normalize($0.image, width: analysisWidth, height: height),
+                     overallLook: try overallLookDistance(referenceImage, $0.image))
+    }
 
     var warnings: [String] = []
     let referenceShape = Double(referenceImage.width) / Double(referenceImage.height)

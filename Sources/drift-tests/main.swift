@@ -94,9 +94,9 @@ func testScoring() throws {
 }
 
 func testSampling() {
-    let normal = sampleTimes(duration: 5)
+    let normal = sampleTimes(duration: 5, count: 3)
     expect(near(normal[0].seconds, 0.1) && near(normal[1].seconds, 2.5) && near(normal[2].seconds, 4.9), "samples sit at start, middle and end")
-    let tiny = sampleTimes(duration: 0.1)
+    let tiny = sampleTimes(duration: 0.1, count: 3)
     expect(tiny[0].seconds > 0 && tiny[0].seconds < tiny[1].seconds && tiny[1].seconds < tiny[2].seconds && tiny[2].seconds < 0.1,
            "very short videos still sample in order and inside the video")
 }
@@ -109,7 +109,7 @@ func testArguments() throws {
     expect(options.outputDirectory == "here", "output folder is read")
     expect(try parseArguments(["--help"]).showHelp, "help works without files")
 
-    for bad in [["a.png"], ["a", "b", "c"], ["a", "b", "--nope"], ["a", "b", "--saturation-min"], ["a", "b", "--saturation-min", "lots"],
+    for bad in [["a.png"], ["a", "b", "--nope"], ["a", "b", "--saturation-min"], ["a", "b", "--saturation-min", "lots"],
                 ["a", "b", "--brightness-max", "nan"], ["a", "b", "--brightness-min", "-1"],
                 ["a", "b", "--saturation-min", "120"], ["a", "b", "--brightness-min", "111"], ["a", "b", "--background-min", "101"]] {
         expect(throwsError { _ = try parseArguments(bad) }, "rejects arguments: \(bad.joined(separator: " "))")
@@ -121,7 +121,7 @@ func testReports() throws {
     let bad = try score(referenceFile: "<script>.png", videoFile: "v&v.mp4", reference: reference,
                         frames: [frameAt(solid(20, 200, 20))], thresholds: Thresholds())
     let html = htmlReport(bad, referenceJPEG: encodeJPEG(reference), frameJPEGs: [encodeJPEG(reference)])
-    expect(!html.contains("<script>") && html.contains("&lt;script&gt;.png"), "file names are escaped in the HTML report")
+    expect(!html.contains("<script>.png") && html.contains("&lt;script&gt;.png"), "file names are escaped in the HTML report")
     expect(html.contains("v&amp;v.mp4"), "ampersands are escaped in the HTML report")
     expect(html.contains(">FAIL<"), "HTML shows the verdict")
     expect(textReport(bad).contains("OVERALL: FAIL"), "text report shows the verdict")
@@ -137,7 +137,7 @@ func testEndToEnd() throws {
     try makeSamples(in: folder)
     let reference = folder + "/reference.png"
     func run(_ name: String) throws -> Scorecard {
-        try runScorecard(referencePath: reference, videoPath: "\(folder)/\(name)", thresholds: Thresholds()).card
+        try runScorecard(referencePath: reference, videoPath: "\(folder)/\(name)", thresholds: Thresholds(), frameCount: 3).card
     }
     func metricPassed(_ frame: FrameResult, _ metric: String) -> Bool { frame.checks.first { $0.metric == metric }!.passed }
 
@@ -158,7 +158,7 @@ func testEndToEnd() throws {
 
     var loose = Thresholds()
     loose.saturationMin = 0; loose.saturationMax = 10000; loose.brightnessMin = 0; loose.brightnessMax = 10000; loose.backgroundMin = 0
-    expect(try runScorecard(referencePath: reference, videoPath: folder + "/color-drift.mp4", thresholds: loose).card.passed,
+    expect(try runScorecard(referencePath: reference, videoPath: folder + "/color-drift.mp4", thresholds: loose, frameCount: 3).card.passed,
            "user-set thresholds change the verdict")
 
     let missing = folder + "/missing.mp4"
@@ -177,7 +177,83 @@ func testEndToEnd() throws {
            "reports are saved, creating folders as needed")
 }
 
+func testNewFeatures() throws {
+    let reference = solid(200, 100, 100)
+    func card(look: Double) throws -> Scorecard {
+        try score(referenceFile: "r.png", videoFile: "v.mp4", reference: reference,
+                  frames: [SampledFrame(label: "Start", seconds: 0, image: reference, overallLook: look)], thresholds: Thresholds())
+    }
+    expect(try card(look: 0.2).verdict == .pass, "a close overall look passes")
+    let nearCard = try card(look: 0.47)
+    expect(nearCard.verdict == .unsure && !nearCard.passed, "just outside a limit is unsure, and is still not a pass")
+    expect(try card(look: 0.48).verdict == .unsure, "the edge of the unsure margin is unsure")
+    expect(try card(look: 0.49).verdict == .fail, "beyond the margin is a failure")
+    expect(textReport(nearCard).contains("OVERALL: UNSURE") && textReport(nearCard).contains("Close to a limit:"), "text report explains unsure")
+    let mixed = try score(referenceFile: "r.png", videoFile: "v.mp4", reference: reference, frames: [
+        SampledFrame(label: "A", seconds: 0, image: reference, overallLook: 0.47), SampledFrame(label: "B", seconds: 1, image: reference, overallLook: 0.9),
+    ], thresholds: Thresholds())
+    expect(mixed.verdict == .fail, "one clear failure outweighs unsure frames")
+    let page = htmlReport(nearCard, referenceJPEG: encodeJPEG(reference), frameJPEGs: [encodeJPEG(reference)])
+    expect(page.contains(">UNSURE<") && page.contains("a person should look"), "HTML shows unsure in words")
+
+    let five = sampleTimes(duration: 10)
+    expect(five.map(\.label) == ["Start", "25%", "Middle", "75%", "End"] && near(five[1].seconds, 2.5), "five evenly spaced frames by default")
+    expect(sampleTimes(duration: 10, count: 9).count == 9, "the number of frames can be changed")
+    let parsed = try parseArguments(["a.png", "b", "c.mp4", "--frames", "7", "--decisions", "d.txt", "--overall-look-max", "0.3"])
+    expect(parsed.videoPaths == ["b", "c.mp4"] && parsed.frameCount == 7 && parsed.decisionsPath == "d.txt" && parsed.thresholds.overallLookMax == 0.3, "reads several inputs and new options")
+    let cartoon = try parseArguments(["--background-min", "55", "--preset", "cartoon", "a.png", "b"])
+    expect(cartoon.thresholds.backgroundMin == 55 && cartoon.thresholds.overallLookMax == 0.40, "a preset applies, and your own limits win in any order")
+    for bad in [["a", "b", "--frames", "2"], ["a", "b", "--frames", "26"], ["a", "b", "--frames", "x"], ["a", "b", "--preset", "nope"]] {
+        expect(throwsError { _ = try parseArguments(bad) }, "rejects arguments: \(bad.joined(separator: " "))")
+    }
+
+    let folder = NSTemporaryDirectory() + "drift-batch-" + UUID().uuidString
+    defer { try? FileManager.default.removeItem(atPath: folder) }
+    try makeSamples(in: folder)
+    let picture = folder + "/reference.png"
+    let clips = folder + "/clips"
+    try FileManager.default.createDirectory(atPath: clips, withIntermediateDirectories: true)
+    for name in ["clip10.mp4", "clip2.mp4"] { try FileManager.default.copyItem(atPath: folder + "/steady.mp4", toPath: clips + "/" + name) }
+    try Data("bad".utf8).write(to: URL(fileURLWithPath: clips + "/clip3.mp4"))
+    try Data("x".utf8).write(to: URL(fileURLWithPath: clips + "/notes.txt"))
+    let found = try expandInputs([clips])
+    expect(found.batch && found.videos.map { ($0 as NSString).lastPathComponent } == ["clip2.mp4", "clip3.mp4", "clip10.mp4"], "folders list videos in natural order")
+    let one = try expandInputs([folder + "/steady.mp4"])
+    expect(!one.batch && one.videos.count == 1, "one video keeps the single report")
+    expect(throwsError(.fileNotFound(folder + "/nope")) { _ = try expandInputs([folder + "/nope"]) }, "a missing input is a clear error")
+    let empty = folder + "/empty"
+    try FileManager.default.createDirectory(atPath: empty, withIntermediateDirectories: true)
+    expect(throwsError { _ = try expandInputs([empty]) }, "a folder with no videos is a clear error")
+
+    let output = folder + "/out"
+    let outcomes = runBatch(referencePath: picture, videos: found.videos, thresholds: Thresholds(), frameCount: 3, outputDirectory: output)
+    expect(outcomes.map(\.verdict) == [.pass, .unsure, .pass] && outcomes[1].error != nil, "one unreadable clip does not stop the run and never passes")
+    try saveBatch(outcomes, referenceFile: "r<.png", thresholds: Thresholds(), to: output)
+    let index = try String(contentsOfFile: output + "/report.html", encoding: .utf8)
+    expect(FileManager.default.fileExists(atPath: output + "/clips/1/report.html") && index.contains("clips/1/report.html"), "the summary links to each clip")
+    expect(!FileManager.default.fileExists(atPath: output + "/clips/2/report.html") && index.contains("#row-2"), "an unreadable clip links to its explanation")
+    expect(index.contains("r&lt;.png") && index.contains("<svg") && index.contains("data-tip"), "the summary is escaped and has charts")
+    expect(try JSONDecoder().decode([ClipOutcome].self, from: Data(contentsOf: URL(fileURLWithPath: output + "/report.json"))) == outcomes, "summary JSON round-trips")
+    expect(batchText(outcomes).contains("Passed 2, unsure 1, failed 0, of 3 clips."), "text summary counts clips")
+
+    let chart = miniChart(title: "<S>", points: [ChartPoint(label: "A", value: 100), ChartPoint(label: "B", value: 87), ChartPoint(label: "C\"", value: 50)], low: 90, high: nil, margin: 5, unit: "%")
+    expect(chart.contains("&lt;S&gt;") && !chart.contains("<S>") && chart.contains("C&quot;"), "chart text is escaped")
+    expect(chart.components(separatedBy: "class=\"mark ok\"").count == 2 && chart.components(separatedBy: "class=\"mark near\"").count == 2 && chart.components(separatedBy: "class=\"mark out\"").count == 2, "points show within, near and outside")
+    expect(chart.contains("2 outside the limits") && chart.contains("just outside the limit"), "the chart describes itself in words")
+    expect(miniChart(title: "x", points: [], low: 1, high: nil, margin: 0, unit: "%").isEmpty, "no data draws no chart")
+    expect(!miniChart(title: "x", points: [ChartPoint(label: "A", value: 5), ChartPoint(label: "B", value: 5)], low: nil, high: nil, margin: 0, unit: "").contains("nan"), "a flat line draws safely")
+
+    let decisions = try parseDecisions("keep a one.mp4\n\nredo b.mp4\nKEEP b.mp4\n")
+    expect(decisions == ["a one.mp4": .keep, "b.mp4": .keep], "reads decisions and later changes")
+    expect(throwsError { _ = try parseDecisions("maybe x.mp4") }, "a bad decision line is an error")
+    let scored = try evaluate(outcomes, decisions: ["clip2.mp4": .keep, "clip3.mp4": .redo, "clip10.mp4": .redo, "other.mp4": .keep])
+    expect(scored.keptPass == 1 && scored.redoUnsure == 1 && scored.redoPass == 1 && scored.total == 3, "scores clips against decisions and ignores unknown names")
+    expect(evaluationText(scored).contains("would get 2 of 3 right"), "accuracy is compared with a blunt rule")
+    expect(throwsError { _ = try evaluate(outcomes, decisions: ["z.mp4": .keep]) }, "no matching decisions is an error")
+}
+
 do {
+    try testNewFeatures()
     testMetrics()
     try testScoring()
     testSampling()
