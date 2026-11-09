@@ -4,7 +4,7 @@ AI video can look right in the first frame, then slowly move away from the look 
 
 ## The test
 
-**Read this first:** the numbers in the first two tables overstate what the tool can do, because every clip was compared with one shared picture. The retest further down, using each clip's own start picture, is the fairer result.
+**Read this first:** the first two tables compare every clip with one shared picture. The retest further down compares each clip with its own start picture. The two tests measure different things, and neither is enough alone.
 
 I ran it on all 31 clips from one episode of a real AI-generated video series, scored against the same reference picture. Then I compared each result with my own production decision: 4 clips were approved and 27 were marked for a redo.
 
@@ -26,22 +26,24 @@ The UNSURE result reduced clear mistakes from 3 to 2 on standard limits by sendi
 
 ## Retest with each clip's own start picture
 
-One shared picture is an unfair test: a clip from a different scene can fail just for being a different scene. So I retested the same 31 clips against each clip's own start picture, in a version that isn't released yet. The opening frames now closely matched their pictures, which confirms the pairing.
+With one shared picture, a clip from a different scene can fail just for being a different scene. So I retested the same 31 clips against each clip's own start picture, in a version that isn't released yet. The opening frames now closely matched their pictures, which confirms the pairing.
 
 | Limits | Approved clips | Redo clips | Clearly right | Clearly wrong | Left to a person |
 |---|---|---|---|---|---|
 | Standard | 3 passed, 1 unsure | 17 passed, 10 failed | 13 of 31 | 17 of 31 | 1 of 31 |
 | Cartoon preset | 4 passed | 17 passed, 10 failed | 14 of 31 | 17 of 31 | 0 of 31 |
 
-No approved clip failed, which is the improvement I wanted. But 17 of the 27 redo clips passed. The earlier scores looked strong largely because most clips differed from the one shared picture, and most clips also happened to be redos. Part of those failures measured a change of scene, not drift.
+No approved clip failed, which is the improvement I wanted. But 17 of the 27 redo clips passed, so this test alone misses most of what I rejected.
 
-I have not yet confirmed why each of those 17 clips was redone. My best explanation is that many had problems this tool can't see, such as characters, hands or objects going wrong. The limits were also set using one shared picture and haven't been re-tuned.
+I went back to my production notes for those 17 clips. All 17 had problems this tool can't measure, most often character look (16 clips), objects (11) and body movement (10). 15 of the 17 also had a recorded color, brightness or background failure, but measured against the look of the series, not against the clip's own start picture. A faded start picture produces a faded clip that matches it, so the retest can't catch that kind of drift. My notes list every problem on a clip, not which one decided the redo.
+
+So the two tests catch different things. One shared picture catches drift from the series look, but can't tell it from a change of scene. A clip's own start picture removes the scene problem, but only measures change within the clip. The limits were also set using one shared picture and haven't been re-tuned.
 
 **What the tool is, based on this:** a measurement of color, brightness, background and general resemblance against a start picture. It is not a judge of whether a clip is good.
 
 ## What it showed
 
-- **One shared picture can't separate drift from a change of scene.** With a shared picture, a run of later clips failed. Against their own start pictures, most of the redo clips passed.
+- **One shared picture can't separate drift from a change of scene.** With a shared picture, a run of later clips failed. Against their own start pictures, most of the redo clips passed, including many that had faded from the series look.
 - **Agreement alone is not enough.** Marking every clip for a redo would score 27 of 31, because most clips were redos. On the default limits, the tool beats that blunt rule by only one clip, and it rejected two approved clips.
 - **Changing a limit has a cost.** Lowering the background limit to 60% accepted every approved clip, but also let five redo clips through.
 - **Those misses show what to build next.** The five clips were rejected mostly for problems this version can't see, such as objects or characters changing shape or appearance.
