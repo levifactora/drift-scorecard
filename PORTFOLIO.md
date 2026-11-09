@@ -4,6 +4,8 @@ AI video can look right in the first frame, then slowly move away from the look 
 
 ## The test
 
+**Read this first:** the numbers in the first two tables overstate what the tool can do, because every clip was compared with one shared picture. The retest further down, using each clip's own start picture, is the fairer result.
+
 I ran it on all 31 clips from one episode of a real AI-generated video series, scored against the same reference picture. Then I compared each result with my own production decision: 4 clips were approved and 27 were marked for a redo.
 
 | Limits | Approved clips that passed | Redo clips that failed | Agreement with my decisions |
@@ -22,9 +24,24 @@ Version 2 added an overall-look score, five frames per clip instead of three, an
 
 The UNSURE result reduced clear mistakes from 3 to 2 on standard limits by sending borderline clips to a person. Checking more frames, and adding overall look at its standard limit, did not change any result on this episode. The cartoon preset's limits were chosen after seeing these clips, so its row is a best case and still needs a test on new footage.
 
+## Retest with each clip's own start picture
+
+One shared picture is an unfair test: a clip from a different scene can fail just for being a different scene. So I retested the same 31 clips against each clip's own start picture, in a version that isn't released yet. The opening frames now closely matched their pictures, which confirms the pairing.
+
+| Limits | Approved clips | Redo clips | Clearly right | Clearly wrong | Left to a person |
+|---|---|---|---|---|---|
+| Standard | 3 passed, 1 unsure | 17 passed, 10 failed | 13 of 31 | 17 of 31 | 1 of 31 |
+| Cartoon preset | 4 passed | 17 passed, 10 failed | 14 of 31 | 17 of 31 | 0 of 31 |
+
+No approved clip failed, which is the improvement I wanted. But 17 of the 27 redo clips passed. The earlier scores looked strong largely because most clips differed from the one shared picture, and most clips also happened to be redos. Part of those failures measured a change of scene, not drift.
+
+I have not yet confirmed why each of those 17 clips was redone. My best explanation is that many had problems this tool can't see, such as characters, hands or objects going wrong. The limits were also set using one shared picture and haven't been re-tuned.
+
+**What the tool is, based on this:** a measurement of color, brightness, background and general resemblance against a start picture. It is not a judge of whether a clip is good.
+
 ## What it showed
 
-- **It caught the long slide in quality.** A run of later clips failed under either limit, matching the fading and changed settings in my production notes.
+- **One shared picture can't separate drift from a change of scene.** With a shared picture, a run of later clips failed. Against their own start pictures, most of the redo clips passed.
 - **Agreement alone is not enough.** Marking every clip for a redo would score 27 of 31, because most clips were redos. On the default limits, the tool beats that blunt rule by only one clip, and it rejected two approved clips.
 - **Changing a limit has a cost.** Lowering the background limit to 60% accepted every approved clip, but also let five redo clips through.
 - **Those misses show what to build next.** The five clips were rejected mostly for problems this version can't see, such as objects or characters changing shape or appearance.
@@ -32,4 +49,4 @@ The UNSURE result reduced clear mistakes from 3 to 2 on standard limits by sendi
 
 ## Limits of this test
 
-This is one episode from one creator, with only four approved clips. Some redo decisions used earlier color and background checks that work much like this tool, so the comparison isn't fully independent. The approved clips were also re-rendered later than the others, which may affect their scores. The tool measures color, background and general resemblance only, so a person still needs to review each clip.
+This is one episode from one creator, with only four approved clips, so none of these numbers should be read as general accuracy. Some redo decisions used earlier color and background checks that work much like this tool, so the comparison isn't fully independent. The approved clips were also re-rendered later than the others, which may affect their scores. The tool measures color, background and general resemblance only, so a person still needs to review each clip.
