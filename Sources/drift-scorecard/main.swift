@@ -1,6 +1,8 @@
 import DriftCore
 import Foundation
 
+func note(_ text: String) { FileHandle.standardError.write(Data(text.utf8)) }
+
 do {
     let options = try parseArguments(Array(CommandLine.arguments.dropFirst()))
     if options.showHelp {
@@ -19,13 +21,16 @@ do {
         exit(run.card.passed ? 0 : 1)
     }
 
-    let outcomes = runBatch(referencePath: options.referencePath, videos: videos, thresholds: options.thresholds, frameCount: options.frameCount, outputDirectory: options.outputDirectory)
-    print(batchText(outcomes))
-    try saveBatch(outcomes, referenceFile: URL(fileURLWithPath: options.referencePath).lastPathComponent, thresholds: options.thresholds, to: options.outputDirectory)
-    if let decisions { print("\n" + evaluationText(try evaluate(outcomes, decisions: decisions))) }
+    let interactive = isatty(fileno(stderr)) != 0
+    let result = runBatch(referencePath: options.referencePath, videos: videos, thresholds: options.thresholds, frameCount: options.frameCount) { done, total, _ in
+        if interactive { note("\rChecked \(done) of \(total) clips" + (done == total ? "\n" : "")) }
+    }
+    print(batchText(result.outcomes))
+    try saveBatch(result, referencePath: options.referencePath, thresholds: options.thresholds, to: options.outputDirectory)
+    if let decisions { print("\n" + evaluationText(try evaluate(result.outcomes, decisions: decisions))) }
     print("\nFull report: \(options.outputDirectory)/report.html")
-    exit(outcomes.allSatisfy { $0.verdict == .pass } ? 0 : 1)
+    exit(result.outcomes.allSatisfy { $0.verdict == .pass } ? 0 : 1)
 } catch {
-    FileHandle.standardError.write(Data("Could not run the scorecard. \(error.localizedDescription)\n".utf8))
+    note("Could not run the scorecard. \(error.localizedDescription)\n")
     exit(2)
 }

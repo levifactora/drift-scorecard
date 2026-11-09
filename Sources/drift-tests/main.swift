@@ -120,10 +120,11 @@ func testReports() throws {
     let reference = solid(200, 100, 100)
     let bad = try score(referenceFile: "<script>.png", videoFile: "v&v.mp4", reference: reference,
                         frames: [frameAt(solid(20, 200, 20))], thresholds: Thresholds())
-    let html = htmlReport(bad, referenceJPEG: encodeJPEG(reference), frameJPEGs: [encodeJPEG(reference)])
-    expect(!html.contains("<script>.png") && html.contains("&lt;script&gt;.png"), "file names are escaped in the HTML report")
-    expect(html.contains("v&amp;v.mp4"), "ampersands are escaped in the HTML report")
-    expect(html.contains(">FAIL<"), "HTML shows the verdict")
+    let clip = makeReportClip(file: "</script><img src=x onerror=1>.mp4", card: bad, error: nil, images: [encodeJPEG(reference)])
+    let html = interactiveHTML(clips: [clip], referenceFile: "<script>.png", referenceJPEG: encodeJPEG(reference), thresholds: Thresholds())
+    expect(!html.contains("</script><img") && !html.contains("<script>.png") && html.contains("\\u003cscript>.png"), "file names cannot break out of the report's data")
+    expect(html.contains("\"margins\"") && html.contains(";base64,"), "the report carries its limits and pictures")
+    expect(clip.verdict == .fail && clip.frames[0].values["Saturation"] != nil, "report clips carry results")
     expect(textReport(bad).contains("OVERALL: FAIL"), "text report shows the verdict")
     expect(textReport(bad).contains("Why it failed:"), "text report explains failure")
     let decoded = try JSONDecoder().decode(Scorecard.self, from: jsonReport(bad))
@@ -193,8 +194,8 @@ func testNewFeatures() throws {
         SampledFrame(label: "A", seconds: 0, image: reference, overallLook: 0.47), SampledFrame(label: "B", seconds: 1, image: reference, overallLook: 0.9),
     ], thresholds: Thresholds())
     expect(mixed.verdict == .fail, "one clear failure outweighs unsure frames")
-    let page = htmlReport(nearCard, referenceJPEG: encodeJPEG(reference), frameJPEGs: [encodeJPEG(reference)])
-    expect(page.contains(">UNSURE<") && page.contains("a person should look"), "HTML shows unsure in words")
+    let unsureClip = makeReportClip(file: "v.mp4", card: nearCard, error: nil, images: [encodeJPEG(reference)])
+    expect(unsureClip.verdict == .unsure && interactiveHTML(clips: [unsureClip], referenceFile: "r.png", referenceJPEG: nil, thresholds: Thresholds()).contains("A person should look"), "the report shows unsure in words")
 
     let five = sampleTimes(duration: 10)
     expect(five.map(\.label) == ["Start", "25%", "Middle", "75%", "End"] && near(five[1].seconds, 2.5), "five evenly spaced frames by default")
@@ -225,23 +226,18 @@ func testNewFeatures() throws {
     try FileManager.default.createDirectory(atPath: empty, withIntermediateDirectories: true)
     expect(throwsError { _ = try expandInputs([empty]) }, "a folder with no videos is a clear error")
 
-    let output = folder + "/out"
-    let outcomes = runBatch(referencePath: picture, videos: found.videos, thresholds: Thresholds(), frameCount: 3, outputDirectory: output)
+    let batchResult = runBatch(referencePath: picture, videos: found.videos, thresholds: Thresholds(), frameCount: 3)
+    let outcomes = batchResult.outcomes
     expect(outcomes.map(\.verdict) == [.pass, .unsure, .pass] && outcomes[1].error != nil, "one unreadable clip does not stop the run and never passes")
-    try saveBatch(outcomes, referenceFile: "r<.png", thresholds: Thresholds(), to: output)
-    let index = try String(contentsOfFile: output + "/report.html", encoding: .utf8)
-    expect(FileManager.default.fileExists(atPath: output + "/clips/1/report.html") && index.contains("clips/1/report.html"), "the summary links to each clip")
-    expect(!FileManager.default.fileExists(atPath: output + "/clips/2/report.html") && index.contains("#row-2"), "an unreadable clip links to its explanation")
-    expect(index.contains("r&lt;.png") && index.contains("<svg") && index.contains("data-tip"), "the summary is escaped and has charts")
-    expect(try JSONDecoder().decode([ClipOutcome].self, from: Data(contentsOf: URL(fileURLWithPath: output + "/report.json"))) == outcomes, "summary JSON round-trips")
+    expect(outcomes.map(\.file) == ["clip2.mp4", "clip3.mp4", "clip10.mp4"] && batchResult.clips.map(\.file) == outcomes.map(\.file), "results keep clip order when checked in parallel")
+    let batchOutput = folder + "/out"
+    try saveBatch(batchResult, referencePath: picture, thresholds: Thresholds(), to: batchOutput)
+    let index = try String(contentsOfFile: batchOutput + "/report.html", encoding: .utf8)
+    expect(index.contains("clip10.mp4") && index.contains("\"error\":\""), "the report includes every clip and any error")
+    expect(try JSONDecoder().decode([ClipOutcome].self, from: Data(contentsOf: URL(fileURLWithPath: batchOutput + "/report.json"))) == outcomes, "summary JSON round-trips")
     expect(batchText(outcomes).contains("Passed 2, unsure 1, failed 0, of 3 clips."), "text summary counts clips")
-
-    let chart = miniChart(title: "<S>", points: [ChartPoint(label: "A", value: 100), ChartPoint(label: "B", value: 87), ChartPoint(label: "C\"", value: 50)], low: 90, high: nil, margin: 5, unit: "%")
-    expect(chart.contains("&lt;S&gt;") && !chart.contains("<S>") && chart.contains("C&quot;"), "chart text is escaped")
-    expect(chart.components(separatedBy: "class=\"mark ok\"").count == 2 && chart.components(separatedBy: "class=\"mark near\"").count == 2 && chart.components(separatedBy: "class=\"mark out\"").count == 2, "points show within, near and outside")
-    expect(chart.contains("2 outside the limits") && chart.contains("just outside the limit"), "the chart describes itself in words")
-    expect(miniChart(title: "x", points: [], low: 1, high: nil, margin: 0, unit: "%").isEmpty, "no data draws no chart")
-    expect(!miniChart(title: "x", points: [ChartPoint(label: "A", value: 5), ChartPoint(label: "B", value: 5)], low: nil, high: nil, margin: 0, unit: "").contains("nan"), "a flat line draws safely")
+    let shrunk = halfSize(solid(10, 20, 30, width: 40, height: 20))
+    expect(shrunk.width == 20 && shrunk.height == 10 && shrunk.rgba[0] == 10, "large reports can use smaller frames")
 
     let decisions = try parseDecisions("keep a one.mp4\n\nredo b.mp4\nKEEP b.mp4\n")
     expect(decisions == ["a one.mp4": .keep, "b.mp4": .keep], "reads decisions and later changes")

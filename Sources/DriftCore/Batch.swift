@@ -48,20 +48,59 @@ func worstValue(_ card: Scorecard, _ metric: String) -> Double? {
     }
 }
 
-public func runBatch(referencePath: String, videos: [String], thresholds: Thresholds, frameCount: Int, outputDirectory: String) -> [ClipOutcome] {
-    videos.enumerated().map { index, video in
-        let name = URL(fileURLWithPath: video).lastPathComponent
-        do {
-            let run = try runScorecard(referencePath: referencePath, videoPath: video, thresholds: thresholds, frameCount: frameCount)
-            try saveReports(run, to: "\(outputDirectory)/clips/\(index + 1)", backLink: "../../report.html")
-            return ClipOutcome(file: name, card: run.card, error: nil)
-        } catch {
-            return ClipOutcome(file: name, card: nil, error: error.localizedDescription)
-        }
-    }
+public struct BatchResult {
+    public let outcomes: [ClipOutcome]
+    public let clips: [ReportClip]
+    public let reference: PixelImage?
 }
 
-private let verdictIcons: [Verdict: String] = [.pass: "✓", .unsure: "?", .fail: "✕"]
+/// Frames above this count are stored at half size, so a very large report still opens quickly.
+let fullSizeFrameBudget = 400
+
+/// Checks clips on several processor cores at once. Results keep the input order.
+public func runBatch(referencePath: String, videos: [String], thresholds: Thresholds, frameCount: Int,
+                     progress: ((_ done: Int, _ total: Int, _ file: String) -> Void)? = nil) -> BatchResult {
+    let lock = NSLock()
+    var outcomes = [ClipOutcome?](repeating: nil, count: videos.count)
+    var clips = [ReportClip?](repeating: nil, count: videos.count)
+    var reference: PixelImage?
+    var next = 0, done = 0
+    let shrink = videos.count * frameCount > fullSizeFrameBudget
+    let workers = max(1, min(videos.count, ProcessInfo.processInfo.activeProcessorCount - 1))
+    DispatchQueue.concurrentPerform(iterations: workers) { _ in
+        while true {
+            lock.lock()
+            let index = next
+            next += 1
+            lock.unlock()
+            guard index < videos.count else { return }
+            autoreleasepool {
+                let name = URL(fileURLWithPath: videos[index]).lastPathComponent
+                let outcome: ClipOutcome, clip: ReportClip
+                var picture: PixelImage?
+                do {
+                    let run = try runScorecard(referencePath: referencePath, videoPath: videos[index], thresholds: thresholds, frameCount: frameCount)
+                    let images = run.frames.map { encodeJPEG(shrink ? halfSize($0) : $0) }
+                    outcome = ClipOutcome(file: name, card: run.card, error: nil)
+                    clip = makeReportClip(file: name, card: run.card, error: nil, images: images)
+                    picture = run.reference
+                } catch {
+                    outcome = ClipOutcome(file: name, card: nil, error: error.localizedDescription)
+                    clip = makeReportClip(file: name, card: nil, error: error.localizedDescription, images: [])
+                }
+                lock.lock()
+                outcomes[index] = outcome
+                clips[index] = clip
+                if reference == nil { reference = picture }
+                done += 1
+                let finished = done
+                lock.unlock()
+                progress?(finished, videos.count, name)
+            }
+        }
+    }
+    return BatchResult(outcomes: outcomes.compactMap { $0 }, clips: clips.compactMap { $0 }, reference: reference)
+}
 
 public func batchText(_ outcomes: [ClipOutcome]) -> String {
     var lines = ["DRIFT SCORECARD", ""]
@@ -74,72 +113,16 @@ public func batchText(_ outcomes: [ClipOutcome]) -> String {
     return lines.joined(separator: "\n")
 }
 
-public func batchHTML(_ outcomes: [ClipOutcome], referenceFile: String, thresholds: Thresholds) -> String {
-    func count(_ verdict: Verdict) -> Int { outcomes.filter { $0.verdict == verdict }.count }
-    let chips = outcomes.enumerated().map { index, outcome -> String in
-        let text = escapeHTML("Clip \(index + 1), \(outcome.file): \(outcome.verdict.rawValue)")
-        let target = outcome.card == nil ? "#row-\(index + 1)" : "clips/\(index + 1)/report.html"
-        return "<li><a class=\"chip s-\(outcome.verdict.rawValue)\" href=\"\(target)\" title=\"\(text)\" aria-label=\"\(text)\"><span aria-hidden=\"true\">\(index + 1)</span><span aria-hidden=\"true\">\(verdictIcons[outcome.verdict]!)</span></a></li>"
-    }.joined()
-
-    let metrics = ["Saturation", "Brightness", "Background", "Overall look"]
-    let measured = outcomes.enumerated().filter { $0.element.card != nil }
-    var charts = ""
-    if measured.count > 1 {
-        charts = metrics.map { metric -> String in
-            let points = measured.compactMap { index, outcome -> ChartPoint? in
-                worstValue(outcome.card!, metric).map { ChartPoint(label: "Clip \(index + 1)", value: $0) }
-            }
-            let look = metric == "Overall look"
-            let low: Double?, high: Double?
-            switch metric {
-            case "Saturation": (low, high) = (thresholds.saturationMin, thresholds.saturationMax)
-            case "Brightness": (low, high) = (thresholds.brightnessMin, thresholds.brightnessMax)
-            case "Background": (low, high) = (thresholds.backgroundMin, nil)
-            default: (low, high) = (nil, thresholds.overallLookMax)
-            }
-            return miniChart(title: metric, points: points, low: low, high: high, margin: unsureMargins[metric] ?? 0, unit: look ? "" : "%")
-        }.joined()
-        charts = "<h2>Drift across clips</h2><p class=\"note\">Each point is that clip's worst frame.</p><div class=\"charts\">\(charts)</div>\(chartNote)"
-    }
-
-    let rows = outcomes.enumerated().map { index, outcome -> String in
-        let number = index + 1
-        let name = escapeHTML(outcome.file)
-        let link = outcome.card == nil ? name : "<a href=\"clips/\(number)/report.html\">\(name)</a>"
-        func cell(_ metric: String) -> String {
-            guard let card = outcome.card, let value = worstValue(card, metric) else { return "<td>n/a</td>" }
-            return "<td>" + (metric == "Overall look" ? String(format: "%.2f", value) : String(format: "%.1f%%", value)) + "</td>"
-        }
-        let error = outcome.error.map { "<small>\(escapeHTML($0))</small>" } ?? ""
-        return "<tr id=\"row-\(number)\"><th scope=\"row\">\(number)</th><td>\(link)\(error)</td>\(metrics.map(cell).joined())<td class=\"\(outcome.verdict.rawValue)\">\(outcome.verdict.rawValue.uppercased())</td></tr>"
-    }.joined(separator: "\n")
-
-    return """
-    <!doctype html>
-    <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Drift Scorecard</title><style>\(reportCSS)</style></head><body>
-    <h1>Drift scorecard</h1>
-    <p class="files">Reference: \(escapeHTML(referenceFile))</p>
-    <p>Passed \(count(.pass)) · Unsure \(count(.unsure)) · Failed \(count(.fail)) · \(outcomes.count) clips</p>
-    <ol class="chips">\(chips)</ol>
-    \(charts)
-    <h2>Every clip</h2>
-    <div class="wrap"><table><thead><tr><th>#</th><th>Clip</th>\(metrics.map { "<th>\($0)<small>worst frame</small></th>" }.joined())<th>Result</th></tr></thead><tbody>
-    \(rows)
-    </tbody></table></div>
-    \(reportScript)
-    </body></html>
-    """
-}
-
-public func saveBatch(_ outcomes: [ClipOutcome], referenceFile: String, thresholds: Thresholds, to directory: String) throws {
+public func saveBatch(_ result: BatchResult, referencePath: String, thresholds: Thresholds, to directory: String) throws {
     let folder = URL(fileURLWithPath: directory, isDirectory: true)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    try encoder.encode(outcomes).write(to: folder.appendingPathComponent("report.json"))
-    try batchHTML(outcomes, referenceFile: referenceFile, thresholds: thresholds).write(to: folder.appendingPathComponent("report.html"), atomically: true, encoding: .utf8)
+    try encoder.encode(result.outcomes).write(to: folder.appendingPathComponent("report.json"))
+    // A summary-only reference so the page still shows it when every clip was unreadable.
+    let picture = result.reference ?? (try? loadPicture(referencePath)).map { normalize($0, width: 480, height: max(8, 480 * $0.height / $0.width)) }
+    let html = interactiveHTML(clips: result.clips, referenceFile: URL(fileURLWithPath: referencePath).lastPathComponent, referenceJPEG: picture.map(encodeJPEG), thresholds: thresholds)
+    try html.write(to: folder.appendingPathComponent("report.html"), atomically: true, encoding: .utf8)
 }
 
 public enum ClipDecision: String, Codable { case keep, redo }

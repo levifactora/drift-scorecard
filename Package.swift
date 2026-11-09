@@ -7,6 +7,7 @@ let package = Package(
     targets: [
         .target(name: "DriftCore"),
         .executableTarget(name: "drift-scorecard", dependencies: ["DriftCore"]),
+        .executableTarget(name: "DriftScorecardApp", dependencies: ["DriftCore"]),
         .executableTarget(name: "make-samples", dependencies: ["DriftCore"]),
         .executableTarget(name: "drift-tests", dependencies: ["DriftCore"]),
     ]

@@ -23,7 +23,7 @@ public enum ScorecardError: LocalizedError, Equatable {
 
 /// Allowed ranges. Saturation and brightness are percent of the reference (100 = identical).
 /// Background is percent similarity. A value exactly on a limit passes.
-public struct Thresholds: Codable, Equatable {
+public struct Thresholds: Codable, Equatable, Sendable {
     public var saturationMin = 85.0
     public var saturationMax = 115.0
     public var brightnessMin = 90.0

@@ -79,6 +79,25 @@ public func normalize(_ image: CGImage, width: Int, height: Int) -> PixelImage {
     return PixelImage(width: width, height: height, rgba: bytes)
 }
 
+/// Half-size copy, averaging each 2x2 block. Keeps very large reports a sensible file size.
+public func halfSize(_ image: PixelImage) -> PixelImage {
+    let width = max(1, image.width / 2), height = max(1, image.height / 2)
+    guard image.width >= 2, image.height >= 2 else { return image }
+    var bytes = [UInt8](repeating: 255, count: width * height * 4)
+    for y in 0..<height {
+        for x in 0..<width {
+            for channel in 0..<3 {
+                var total = 0
+                for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                    total += Int(image.rgba[((y * 2 + dy) * image.width + x * 2 + dx) * 4 + channel])
+                }
+                bytes[(y * width + x) * 4 + channel] = UInt8(total / 4)
+            }
+        }
+    }
+    return PixelImage(width: width, height: height, rgba: bytes)
+}
+
 public func encodeJPEG(_ image: PixelImage) -> Data {
     let provider = CGDataProvider(data: Data(image.rgba) as CFData)!
     let cgImage = CGImage(width: image.width, height: image.height, bitsPerComponent: 8, bitsPerPixel: 32,

@@ -23,9 +23,23 @@ A video passes only if **every checked frame passes every measure**. A result on
 
 ## The easy way: the Mac app
 
-Build it once with `zsh scripts/build-app.sh`, then double-click **Drift Scorecard** in the `dist` folder. It asks for your picture and your video or folder, then opens the report. Reports are saved in `Documents/Drift Scorecard Reports`.
+Build it once with `zsh scripts/build-app.sh`, then open **Drift Scorecard** in the `dist` folder. Drop in your picture and your video or folder, press **Check clips**, and the report opens when it finishes. Reports are saved in `Documents/Drift Scorecard Reports`. The app needs an Apple silicon Mac running macOS 12 or newer.
 
 The app isn't signed with a paid Apple developer account, so a copy you download may be blocked the first time. If it is, open **System Settings → Privacy & Security** and choose **Open Anyway**.
+
+## The interactive report
+
+The report is one file that works offline. You can share it by sending the file.
+
+- **Live limits:** drag a slider and every result, graph and count updates at once. Copy the limits you like to use on your next run.
+- **Hover to scrub:** move across a clip's card to play through its frames.
+- **Compare:** open a clip and drag across the picture to compare it with your reference.
+- **Live accuracy:** press Keep or Redo on clips and see how well the current limits agree with you.
+- **Find clips quickly:** filter, search, sort by biggest problems, or switch to a table.
+- **Keyboard:** press `?` in the report to see the shortcuts.
+- **Export:** download a CSV or your decisions.
+
+Your decisions are remembered in that browser on that computer. Press **Decisions** to keep a permanent copy.
 
 ## What you need to use the Terminal version
 
@@ -86,7 +100,7 @@ swift run --quiet drift-scorecard my-picture.png my-video.mp4 --out report-for-c
 
 ## Check a whole folder
 
-Give it a folder instead of a video. You get one summary with every clip's result, drift graphs across the clips, and a link to each clip's own report. A clip that can't be read is listed as UNSURE and doesn't stop the run.
+Give it a folder instead of a video. Clips are checked several at a time, and the report shows every clip with drift graphs across the whole set. A clip that can't be read is listed as UNSURE and doesn't stop the run.
 
 ```bash
 swift run --quiet drift-scorecard my-picture.png my-clips-folder
@@ -126,7 +140,7 @@ This matters most for videos from other tools. Video files store color different
 
 ## Test it on your own clips
 
-The honest way to know whether this helps you is to compare it with your own decisions. Make a text file with one line per clip, using `keep` or `redo`:
+The honest way to know whether this helps you is to compare it with your own decisions. The easiest way is the Keep and Redo buttons in the report. For the Terminal, make a text file with one line per clip, using `keep` or `redo`:
 
 ```
 keep clip_01.mp4
@@ -143,7 +157,7 @@ It shows how many clips it got clearly right, clearly wrong and left to a person
 
 ## Reading the result
 
-The report is saved as `report.html` for people and `report.json` for other software. It includes a graph for each measure. The shaded area is the allowed range, a circle is within limits, and a diamond is outside them. A folder check's graphs show each clip's worst frame.
+The report is saved as `report.html` for people and `report.json` for other software. Graphs show the allowed range as a shaded area. A circle is within limits, and a diamond is outside them.
 
 The program also finishes with a status number that automated workflows can use:
 
@@ -179,6 +193,8 @@ The tests check the math on known colors, the pass and fail rules, error handlin
 | `Sources/DriftCore/Media.swift` | Opening pictures and pulling frames from video |
 | `Sources/DriftCore/Report.swift` | Terminal, HTML and JSON reports, and graphs |
 | `Sources/DriftCore/Batch.swift` | Folder checks and accuracy comparison |
-| `scripts/` | Builds the Mac app |
+| `Sources/DriftCore/ReportApp.swift` | The interactive report |
+| `Sources/DriftScorecardApp/` | The Mac app |
+| `scripts/` | Builds the Mac app and its icon |
 | `Sources/DriftCore/SampleMedia.swift` | Practice picture and videos |
 | `Sources/drift-tests/main.swift` | The tests |
